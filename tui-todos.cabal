@@ -67,7 +67,7 @@ executable tui-test
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base, brick, vty, vty-unix, vty-crossplatform, mtl, microlens, microlens-th, microlens-mtl, vector, aeson, bytestring, text
+    build-depends:    base, brick, vty, vty-unix, vty-crossplatform, mtl, microlens, microlens-th, microlens-mtl, vector, aeson, bytestring, text, directory
 
     -- Directories containing source files.
     hs-source-dirs:   app

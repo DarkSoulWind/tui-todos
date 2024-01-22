@@ -4,16 +4,16 @@
 module TodoList where
 
 import Control.Monad.State
-import Lens.Micro ((^.))
-import Lens.Micro.Mtl
+import Lens.Micro ((&), (.~), (^.))
 import Lens.Micro.TH (makeLenses)
 
 import Brick
 import qualified Brick.Widgets.Border as B
 import qualified Brick.Widgets.Center as C
 import qualified Brick.Widgets.List as L
+import qualified Brick.Widgets.Table as TB
 import Data.Aeson
-import Data.ByteString.Lazy as BSL
+import qualified Data.ByteString.Lazy as BSL
 import qualified Data.Vector as Vec
 import qualified Graphics.Vty as V
 
@@ -65,6 +65,9 @@ instance FromJSON Todo where
             <*> v .: "description"
             <*> v .: "completed"
 
+encodeTodoFile :: TodoFile -> BSL.ByteString
+encodeTodoFile = encode
+
 formatTodo :: Todo -> String
 formatTodo = title
 
@@ -76,8 +79,8 @@ renderListElement sel e =
                 else " "
      in str $ selStr ++ " " ++ formatTodo e
 
-draw :: AppState -> [Widget ()]
-draw x = [ui]
+drawUI :: AppState -> [Widget ()]
+drawUI x = [ui]
   where
     theList = x ^. todosList
     selectedIndex = theList ^. L.listSelectedL
@@ -88,15 +91,25 @@ draw x = [ui]
     label = str " Item " <+> currentIndexStr <+> str " of " <+> total <+> str " "
     box = B.borderWithLabel label $ L.renderList renderListElement True theList
     listUI = hLimit 25 $ vLimit 15 box
+    helpTableRows =
+        map
+            (\[l, r] -> [padRight (Pad 2) l, padLeft (Pad 2) r])
+            [ [str "q", str "quit"]
+            , [str "+", str "add todo"]
+            , [str "-", str "remove todo"]
+            ]
+    helpTable =
+        TB.surroundingBorder False $
+            TB.rowBorders False $
+                TB.columnBorders False $
+                    TB.alignRight 1 $
+                        TB.alignLeft 0 $
+                            TB.table helpTableRows
     helpBox =
         B.borderWithLabel (str " help ") $
             padTopBottom 1 $
                 padLeftRight 2 $
-                    vBox
-                        [ str "q to quit"
-                        , str "+ to add a todo"
-                        , str "- to remove a todo"
-                        ]
+                    TB.renderTable helpTable
     ui = C.center $ vBox [C.hCenter listUI, C.hCenter helpBox]
 
 handleEvent :: BrickEvent () e -> EventM () AppState ()
@@ -124,19 +137,19 @@ handleEvent _ = return ()
 
 moveDown :: EventM () AppState ()
 moveDown = do
-    st <- use todosList
-    put $ AppState{_todosList = L.listMoveDown st, _exitStatus = None}
+    st <- get
+    put $ st & todosList .~ L.listMoveDown (st ^. todosList)
 
 moveUp :: EventM () AppState ()
 moveUp = do
-    st <- use todosList
-    put $ AppState{_todosList = L.listMoveUp st, _exitStatus = None}
+    st <- get
+    put $ st & todosList .~ L.listMoveUp (st ^. todosList)
 
 setExitStatus :: ExitStatus -> AppState -> AppState
-setExitStatus x st = AppState{_todosList = st ^. todosList, _exitStatus = x}
+setExitStatus x st = st & exitStatus .~ x
 
 removeTodo :: Int -> AppState -> AppState
-removeTodo i st = AppState{_todosList = L.listRemove i $ st ^. todosList, _exitStatus = st ^. exitStatus}
+removeTodo i st = st & todosList .~ L.listRemove i (st ^. todosList)
 
 customAttr :: AttrName
 customAttr = L.listSelectedAttr <> attrName "custom"
@@ -153,7 +166,7 @@ theMap =
 theApp :: App AppState e ()
 theApp =
     App
-        { appDraw = draw
+        { appDraw = drawUI
         , appChooseCursor = showFirstCursor
         , appHandleEvent = handleEvent
         , appStartEvent = return ()
